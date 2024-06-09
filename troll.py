@@ -1,11 +1,11 @@
 import websockets
-#from websockets.sync.client import connect
-from websockets.client import connect
+from websockets.sync.client import connect
 import json
 import time
 import argparse
 import asyncio
 import sys
+from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 
 
 parser = argparse.ArgumentParser()
@@ -53,12 +53,12 @@ def read_file_as_lines(file_path):
     
 
 
-async def write_lines_at_pos(pos, lines, socket):
+def write_lines_at_pos(pos, lines, socket):
     '''Use websocket to write all the given lines at a position in a map.'''
     for line_index in range(len(lines)):
         line = lines[line_index]
         # make a websocket send request for each line
-        chunks = chunk(line,30)
+        chunks = chunk(line,100)
         x = 0
         for line_chunk in chunks:
             
@@ -75,8 +75,11 @@ async def write_lines_at_pos(pos, lines, socket):
             write_req = WriteRequest(writes)
             # send
             message_write = json.dumps(write_req.to_dict())
-            await socket.send(message_write)
-            await asyncio.sleep(0.15)
+            socket.send(message_write)
+            # try :
+            #     print(socket.recv())
+            # except Exception as e:
+            #     print(f"oh a exception {e}")
 
 # the request id in a request doesnt seem to be super important
 req_id = 1
@@ -156,29 +159,32 @@ url = f"wss://www.yourworldoftext.com/{map_id}/ws/"
 TILE_HEIGHT = 8
 TILE_WIDTH = 16
 
-
-
-async def indef_write_lines_at_pos(pos, lines):
+def indef_write_lines_at_pos(pos, lines):
     while True:
         try:
-            async with connect(url) as socket:
-                await write_lines_at_pos(pos, lines, socket)
-                print("Sent") 
+            with connect(url) as socket:
+                write_lines_at_pos(pos, lines, socket)
+                print(f"Sent at {pos}") 
         except Exception as e:
             # ensures any error encountered are handled and attempt can be tried again
-            print(f"Exception occurred: {e}")
+            print(f"Exception occurred: {e} {pos}")
 
-async def main():
+def main():
     lines = read_file_as_lines(file_path)
-    workers = []
+    futures = []
     line_no = 0
+    executor = ThreadPoolExecutor()
+    
     for chunk_of_lines in chunk(lines,40):
-        workers.append(indef_write_lines_at_pos([pos[0]+line_no,pos[1]], chunk_of_lines))
+        print(line_no)
+        future = executor.submit(indef_write_lines_at_pos,[pos[0]+line_no,pos[1]], chunk_of_lines)
+        futures.append(future)
         line_no += len(chunk_of_lines)
-    await asyncio.gather(*workers)
-
-
+    
+    wait(futures, return_when= ALL_COMPLETED)
+        
+    
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main() 
