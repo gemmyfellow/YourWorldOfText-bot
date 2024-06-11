@@ -65,7 +65,6 @@ def write_lines_at_pos(pos, lines, socket):
             # send
             message_write = json.dumps(write_req.to_dict())
             socket.send(message_write)
-            time.sleep(3)
 
 # the request id in a request doesnt seem to be super important, but i have it anyway
 req_id = 1
